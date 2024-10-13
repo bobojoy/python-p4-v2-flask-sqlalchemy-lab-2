@@ -61,6 +61,7 @@ class Review(db.Model, SerializerMixin):
     item = db.relationship('Item', back_populates='reviews')
 
     # Serialization rules
+    
     serialize_rules = (
         ('customer', '-reviews'),  # Exclude reviews from customer serialization
         ('item', '-reviews'),      # Exclude reviews from item serialization
