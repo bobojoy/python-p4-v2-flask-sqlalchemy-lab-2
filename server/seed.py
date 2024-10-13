@@ -1,34 +1,53 @@
-#!/usr/bin/env python3
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import MetaData
+from sqlalchemy.ext.associationproxy import association_proxy
+from sqlalchemy_serializer import SerializerMixin
 
-from app import app
-from models import db, Customer, Review, Item
+metadata = MetaData(naming_convention={
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+})
 
-with app.app_context():
+db = SQLAlchemy(metadata=metadata)
 
-    Customer.query.delete()
-    Review.query.delete()
-    Item.query.delete()
+class Customer(db.Model, SerializerMixin):
+    __tablename__ = 'customers'
+    serialize_rules = ('-reviews',)  # Correctly exclude reviews
 
-    customer1 = Customer(name='Tal Yuri')
-    customer2 = Customer(name='Raha Rosario')
-    customer3 = Customer(name='Luca Mahan')
-    db.session.add_all([customer1, customer2, customer3])
-    db.session.commit()
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String)
 
-    item1 = Item(name='Laptop Backpack', price=49.99)
-    item2 = Item(name='Insulated Coffee Mug', price=9.99)
-    item3 = Item(name='6 Foot HDMI Cable', price=12.99)
-    db.session.add_all([item1, item2, item3])
-    db.session.commit()
+    reviews = db.relationship('Review', back_populates='customer')
 
-    db.session.add(Review(comment="zipper broke the first week",
-                   customer=customer1, item=item1))
-    db.session.add(Review(comment="love this backpack!",
-                   customer=customer2, item=item1))
-    db.session.add(Review(comment="coffee stays hot for hours!",
-                   customer=customer1, item=item2))
-    db.session.add(Review(comment="best coffee mug ever!",
-                   customer=customer3, item=item2))
-    db.session.add(Review(comment="cable too short",
-                   customer=customer3, item=item3))
-    db.session.commit()
+    items = association_proxy('reviews', 'item', creator=lambda item_obj: Review(item=item_obj))
+
+    def __repr__(self):
+        return f'<Customer {self.id}, {self.name}>'
+
+class Item(db.Model, SerializerMixin):
+    __tablename__ = 'items'
+    serialize_rules = ('-reviews',)  # Correctly exclude reviews
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String)
+    price = db.Column(db.Float)
+
+    reviews = db.relationship('Review', back_populates='item')
+
+    def __repr__(self):
+        return f'<Item {self.id}, {self.name}, {self.price}>'
+
+class Review(db.Model, SerializerMixin):
+    __tablename__ = 'reviews'
+    serialize_rules = ('-customer.reviews', '-item.reviews')  # Exclude customer and item reviews
+
+    id = db.Column(db.Integer, primary_key=True)
+    comment = db.Column(db.String)
+
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'))
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'))
+
+    customer = db.relationship('Customer', back_populates='reviews')
+    item = db.relationship('Item', back_populates='reviews')
+
+    def __repr__(self):
+        return f'<Review {self.id}, {self.comment}>'
